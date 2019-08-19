@@ -174,6 +174,11 @@ func (action *TradeAggregateIndexAction) loadParams() {
 	action.EndTimeFilter = action.GetTimeMillis("end_time")
 	action.ResolutionFilter = action.GetInt64("resolution")
 
+	// return any invalid parameter error that might have occured
+	if action.Err != nil {
+		return
+	}
+
 	//check if resolution is legal
 	resolutionDuration := gTime.Duration(action.ResolutionFilter) * gTime.Millisecond
 	if history.StrictResolutionFiltering {
@@ -231,6 +236,12 @@ func (action *TradeAggregateIndexAction) loadRecords() {
 				"must be greater than the offset and greater than the provided start time"))
 			return
 		}
+	}
+
+	tradeAggregationsQ, err = tradeAggregationsQ.LimitTimeRange()
+	if err != nil {
+		action.SetInvalidField("end_time", err)
+		return
 	}
 
 	action.Err = historyQ.Select(&action.Records, tradeAggregationsQ.GetSql())

@@ -133,8 +133,14 @@ func (q *TradeAggregationsQ) GetSql() sq.SelectBuilder {
 		Where(sq.Eq{"base_asset_id": q.baseAssetID, "counter_asset_id": q.counterAssetID})
 
 	//adjust time range and apply time filters
-	bucketSQL = bucketSQL.Where(sq.GtOrEq{"ledger_closed_at": q.startTime.ToTime()})
-	if !q.endTime.IsNil() {
+	if q.endTime.IsNil() {
+		maxEndTime := maxEndTimeQuery(q.baseAssetID, q.counterAssetID)
+		minStartTime := minStartTimeQuery(q.startTime, q.resolution, q.offset, q.baseAssetID, q.counterAssetID,
+			int64(q.pagingParams.Limit))
+		bucketSQL = bucketSQL.Where(fmt.Sprintf("ledger_closed_at >= %s", minStartTime))
+		bucketSQL = bucketSQL.Where(fmt.Sprintf("ledger_closed_at < %s", maxEndTime))
+	} else {
+		bucketSQL = bucketSQL.Where(sq.GtOrEq{"ledger_closed_at": q.startTime.ToTime()})
 		bucketSQL = bucketSQL.Where(sq.Lt{"ledger_closed_at": q.endTime.ToTime()})
 	}
 
@@ -194,4 +200,46 @@ func reverseBucketTrades(resolution int64, offset int64) sq.SelectBuilder {
 		"base_amount as counter_amount",
 		"ARRAY[price_d, price_n] as price",
 	)
+}
+
+// maxEndTimeQuery formats a sql select query to get the most recent trade date for a given asset pair.
+// This is used when endTime is not supplied by the user.
+func maxEndTimeQuery(baseAssetID, counterAssetID int64) string {
+	return fmt.Sprintf("(SELECT MAX(ledger_closed_at) as ledger_closed_at FROM history_trades WHERE base_asset_id=%d AND counter_asset_id=%d)", baseAssetID, counterAssetID)
+}
+
+// minStartTimeQuery formats a sql select query to get the greater of the provided startTime or the
+// adjustedStartTime. Where adjustedStartTime is calculated as
+// (maxEndTimeQuery() - ((pageLimit * resolution) + offset))
+// This is used when endTime is not supplied by the user.
+func minStartTimeQuery(startTime strtime.Millis, resolution, offset, baseAssetID, counterAssetID, pageLimit int64) string {
+	return fmt.Sprintf(`(SELECT GREATEST(TO_TIMESTAMP(%d/1000), TO_TIMESTAMP((cast((extract(epoch from ledger_closed_at) * 1000) as bigint) - ((%d::bigint * %d::bigint) + %d::bigint))/1000)) FROM %s as metq)`, startTime, pageLimit, resolution, offset, maxEndTimeQuery(baseAssetID, counterAssetID))
+}
+
+// LimitTimeRange sets the startTime to the greater of the provided startTime or the adjustedStartTime.
+// Where adjustedStartTime is calculated as
+// (endTime - ((pageLimit * resolution) + offset))
+// This is used when endTime supplied by the user.
+func (q *TradeAggregationsQ) LimitTimeRange() (*TradeAggregationsQ, error) {
+	if q.endTime.IsNil() {
+		return q, nil
+	}
+
+	var adjustedStartTime strtime.Millis
+	maxTimeRange := (int64(q.pagingParams.Limit) * q.resolution) + q.offset
+	maxTimeRangeMillis := strtime.MillisFromInt64(maxTimeRange)
+	offsetMillis := strtime.MillisFromInt64(q.offset)
+
+	if q.endTime < offsetMillis {
+		return &TradeAggregationsQ{}, errors.Errorf("endtime(%d) is less than offset(%d)", q.endTime, offsetMillis)
+	}
+	if q.endTime < maxTimeRangeMillis {
+		// to do: should this error or set endTime = maxTimeRangeMillis
+		return &TradeAggregationsQ{}, errors.Errorf("endtime(%d) is less than maximum resolution range(%d)", q.endTime, maxTimeRangeMillis)
+	}
+	adjustedStartTime = q.endTime - maxTimeRangeMillis
+	if q.startTime < adjustedStartTime {
+		q.startTime = adjustedStartTime
+	}
+	return q, nil
 }
