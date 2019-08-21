@@ -353,7 +353,8 @@ func (q *TradeAggregationsQ) SetPageLimit() (*TradeAggregationsQ, error) {
 		return q, nil
 	}
 	if q.pagingParams.Limit > uint64(52) {
-		return &TradeAggregationsQ{}, errors.New("value is greater than the max number of segments for weekly resolution: 52 weeks. change limit or resolution")
+		q.pagingParams.Limit = uint64(52)
+		// return &TradeAggregationsQ{}, errors.New("value is greater than the max number of segments for weekly resolution: 52 weeks. change limit or resolution")
 	}
 	return q, nil
 }
