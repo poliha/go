@@ -1,7 +1,10 @@
 package history
 
-import "testing"
-import "github.com/stretchr/testify/assert"
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+)
 
 func TestLimitTimeRangeNoChange(t *testing.T) {
 	q := TradeAggregationsQ{
