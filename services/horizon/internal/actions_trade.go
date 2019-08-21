@@ -283,8 +283,8 @@ func (action *TradeAggregateIndexAction) loadPage() {
 		currentStartTime := action.Records[len(action.Records)-1].Timestamp
 
 		// next link
-		newStartTime := currentStartTime + action.ResolutionFilter
-		if newStartTime >= action.EndTimeFilter.ToInt64() {
+		newStartTime := currentStartTime // + action.ResolutionFilter
+		if !action.EndTimeFilter.IsNil() && newStartTime >= action.EndTimeFilter.ToInt64() {
 			newStartTime = action.EndTimeFilter.ToInt64()
 		}
 		q := nextURL.Query()
@@ -321,8 +321,9 @@ func (action *TradeAggregateIndexAction) loadPage() {
 
 	if action.PagingParams.Order == "desc" {
 		// next link
-		currentEndTime := action.Records[len(action.Records)-1].Timestamp
-		newEndTime := currentEndTime - action.ResolutionFilter
+		// currentEndTime := action.Records[len(action.Records)-1].Timestamp
+		// newEndTime := currentEndTime - action.ResolutionFilter
+		newEndTime := action.Records[len(action.Records)-1].Timestamp
 		if newEndTime <= action.StartTimeFilter.ToInt64() {
 			newEndTime = action.StartTimeFilter.ToInt64()
 		}

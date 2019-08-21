@@ -234,10 +234,14 @@ func timeRangeOrderDesc(q *TradeAggregationsQ) (string, string) {
 // Used when the records are to be returned in ascending order.
 func timeRangeOrderAsc(q *TradeAggregationsQ) (string, string) {
 	startTime := minLedgerTimeQuery(q.baseAssetID, q.counterAssetID)
-	endTime := leastLedgerTimeQuery(q.endTime, q.resolution, q.offset, q.baseAssetID, q.counterAssetID, int64(q.pagingParams.Limit))
+	currentEndTime := q.endTime
 	if q.endTime.IsNil() {
-		endTime = greatestLedgerTimeQuery(q.endTime, q.resolution, q.offset, q.baseAssetID, q.counterAssetID, int64(q.pagingParams.Limit))
+		currentEndTime = strtime.Now()
 	}
+	endTime := leastLedgerTimeQuery(currentEndTime, q.resolution, q.offset, q.baseAssetID, q.counterAssetID, int64(q.pagingParams.Limit))
+	// if q.endTime.IsNil() {
+	// 	endTime = greatestLedgerTimeQuery(q.endTime, q.resolution, q.offset, q.baseAssetID, q.counterAssetID, int64(q.pagingParams.Limit))
+	// }
 	return startTime, endTime
 }
 
