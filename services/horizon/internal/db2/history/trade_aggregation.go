@@ -246,7 +246,8 @@ func minTradeTime(baseAssetID, counterAssetID int64) string {
 // (maxTradeTime() - ((pageLimit * resolution) + offset))
 func greatestTimestamp(ledgerTime strtime.Millis, resolution, offset, baseAssetID, counterAssetID, pageLimit int64) string {
 	adjustSeconds := ((pageLimit * resolution) + offset) / 1000
-	return fmt.Sprintf(`(SELECT GREATEST(TO_TIMESTAMP(%d) AT TIME ZONE 'UTC', TO_TIMESTAMP((extract(epoch from ledger_closed_at) - %d))AT TIME ZONE 'UTC') FROM %s as mltq)`, ledgerTime, adjustSeconds, maxTradeTime(baseAssetID, counterAssetID))
+	ledgerTimeInSeconds := ledgerTime.ToInt64() / 1000
+	return fmt.Sprintf(`(SELECT GREATEST(TO_TIMESTAMP(%d) AT TIME ZONE 'UTC', TO_TIMESTAMP((extract(epoch from ledger_closed_at) - %d))AT TIME ZONE 'UTC') FROM %s as mltq)`, ledgerTimeInSeconds, adjustSeconds, maxTradeTime(baseAssetID, counterAssetID))
 }
 
 // leastTimestamp formats a sql select query to get the lesser of the provided timestamp or the
@@ -254,7 +255,8 @@ func greatestTimestamp(ledgerTime strtime.Millis, resolution, offset, baseAssetI
 // (minTradeTime() + ((pageLimit * resolution) + offset))
 func leastTimestamp(ledgerTime strtime.Millis, resolution, offset, baseAssetID, counterAssetID, pageLimit int64) string {
 	adjustSeconds := ((pageLimit * resolution) + offset) / 1000
-	return fmt.Sprintf(`(SELECT LEAST(TO_TIMESTAMP(%d) AT TIME ZONE 'UTC', TO_TIMESTAMP((extract(epoch from ledger_closed_at) + %d))AT TIME ZONE 'UTC') FROM %s as mltq)`, ledgerTime, adjustSeconds, minTradeTime(baseAssetID, counterAssetID))
+	ledgerTimeInSeconds := ledgerTime.ToInt64() / 1000
+	return fmt.Sprintf(`(SELECT LEAST(TO_TIMESTAMP(%d) AT TIME ZONE 'UTC', TO_TIMESTAMP((extract(epoch from ledger_closed_at) + %d))AT TIME ZONE 'UTC') FROM %s as mltq)`, ledgerTimeInSeconds, adjustSeconds, minTradeTime(baseAssetID, counterAssetID))
 }
 
 // LimitTimeRange sets the startTime and endTime depending on the order of the query to the greater of the provided time or the adjustedTime.
