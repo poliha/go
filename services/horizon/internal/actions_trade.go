@@ -280,10 +280,8 @@ func (action *TradeAggregateIndexAction) loadPage() {
 	}
 
 	if action.PagingParams.Order == "asc" {
-		currentStartTime := action.Records[len(action.Records)-1].Timestamp
-
 		// next link
-		newStartTime := currentStartTime // + action.ResolutionFilter
+		newStartTime := action.Records[len(action.Records)-1].Timestamp + action.ResolutionFilter
 		if !action.EndTimeFilter.IsNil() && newStartTime >= action.EndTimeFilter.ToInt64() {
 			newStartTime = action.EndTimeFilter.ToInt64()
 		}
@@ -293,36 +291,19 @@ func (action *TradeAggregateIndexAction) loadPage() {
 		action.Page.Links.Next = hal.NewLink(nextURL.String())
 
 		// prev link
-		if action.StartTimeFilter.IsNil() {
-			action.Page.Links.Prev = action.Page.Links.Self
-			return
-		}
-		currentStartTime = action.Records[0].Timestamp
-		newStartTime = currentStartTime - action.ResolutionFilter
-		if newStartTime >= action.EndTimeFilter.ToInt64() {
+		newStartTime = action.Records[0].Timestamp
+		if !action.EndTimeFilter.IsNil() && newStartTime >= action.EndTimeFilter.ToInt64() {
 			newStartTime = action.EndTimeFilter.ToInt64()
 		}
 		q = prevURL.Query()
+		q.Set("order", "desc")
 		q.Set("start_time", strconv.FormatInt(newStartTime, 10))
 		prevURL.RawQuery = q.Encode()
 		action.Page.Links.Prev = hal.NewLink(prevURL.String())
-
-		// newEndTime := action.Records[0].Timestamp
-		// if newEndTime <= action.StartTimeFilter.ToInt64() {
-		// 	newEndTime = action.StartTimeFilter.ToInt64()
-		// }
-		// q = prevURL.Query()
-		// q.Set("order", "desc")
-		// q.Set("end_time", strconv.FormatInt(newEndTime, 10))
-		// prevURL.RawQuery = q.Encode()
-		// action.Page.Links.Prev = hal.NewLink(prevURL.String())
-		// return
 	}
 
 	if action.PagingParams.Order == "desc" {
 		// next link
-		// currentEndTime := action.Records[len(action.Records)-1].Timestamp
-		// newEndTime := currentEndTime - action.ResolutionFilter
 		newEndTime := action.Records[len(action.Records)-1].Timestamp
 		if newEndTime <= action.StartTimeFilter.ToInt64() {
 			newEndTime = action.StartTimeFilter.ToInt64()
@@ -333,60 +314,14 @@ func (action *TradeAggregateIndexAction) loadPage() {
 		action.Page.Links.Next = hal.NewLink(nextURL.String())
 
 		// prev link
-		if action.EndTimeFilter.IsNil() {
-			action.Page.Links.Prev = action.Page.Links.Self
-			return
-		}
-		newEndTime = action.Records[0].Timestamp + action.ResolutionFilter
+		newEndTime = action.Records[0].Timestamp
 		if newEndTime <= action.StartTimeFilter.ToInt64() {
 			newEndTime = action.StartTimeFilter.ToInt64()
 		}
 		q = prevURL.Query()
+		q.Set("order", "asc")
 		q.Set("end_time", strconv.FormatInt(newEndTime, 10))
 		prevURL.RawQuery = q.Encode()
 		action.Page.Links.Prev = hal.NewLink(prevURL.String())
-		return
-
-		// newStartTime := action.Records[0].Timestamp
-		// if newStartTime >= action.EndTimeFilter.ToInt64() {
-		// 	newStartTime = action.EndTimeFilter.ToInt64()
-		// }
-		// q = prevURL.Query()
-		// q.Set("order", "asc")
-		// q.Set("start_time", strconv.FormatInt(newStartTime, 10))
-		// prevURL.RawQuery = q.Encode()
-		// action.Page.Links.Prev = hal.NewLink(prevURL.String())
-		// return
 	}
-
-	// newUrl := action.FullURL() // preserve scheme and host for the new url links
-	// q := newUrl.Query()
-
-	// action.Page.Links.Self = hal.NewLink(newUrl.String())
-
-	// //adjust time range for next page
-	// if uint64(len(action.Records)) == 0 {
-	// 	action.Page.Links.Next = action.Page.Links.Self
-	// 	action.Page.Links.Prev = action.Page.Links.Self
-	// 	return
-	// }
-
-	// if action.PagingParams.Order == "asc" {
-	// 	newStartTime := action.Records[len(action.Records)-1].Timestamp + action.ResolutionFilter
-	// 	if newStartTime >= action.EndTimeFilter.ToInt64() {
-	// 		newStartTime = action.EndTimeFilter.ToInt64()
-	// 	}
-	// 	q.Set("start_time", strconv.FormatInt(newStartTime, 10))
-	// 	newUrl.RawQuery = q.Encode()
-	// 	action.Page.Links.Next = hal.NewLink(newUrl.String())
-	// } else { //desc
-	// 	newEndTime := action.Records[len(action.Records)-1].Timestamp
-	// 	if newEndTime <= action.StartTimeFilter.ToInt64() {
-	// 		newEndTime = action.StartTimeFilter.ToInt64()
-	// 	}
-	// 	q.Set("end_time", strconv.FormatInt(newEndTime, 10))
-	// 	newUrl.RawQuery = q.Encode()
-	// 	action.Page.Links.Next = hal.NewLink(newUrl.String())
-	// }
-
 }

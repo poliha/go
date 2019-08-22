@@ -133,7 +133,8 @@ func (q *TradeAggregationsQ) GetSql() sq.SelectBuilder {
 		Where(sq.Eq{"base_asset_id": q.baseAssetID, "counter_asset_id": q.counterAssetID})
 
 	//adjust time range and apply time filters
-	if q.endTime.IsNil() || q.startTime.IsNil() {
+	if q.startTime.IsNil() || q.endTime.IsNil() {
+		// get startTime and endTime from the history_trades table
 		startTime, endTime := generateTimeRangeQuery(q)
 		bucketSQL = bucketSQL.Where(fmt.Sprintf("ledger_closed_at >= %s", startTime))
 		bucketSQL = bucketSQL.Where(fmt.Sprintf("ledger_closed_at <= %s", endTime))
@@ -141,17 +142,6 @@ func (q *TradeAggregationsQ) GetSql() sq.SelectBuilder {
 		bucketSQL = bucketSQL.Where(sq.GtOrEq{"ledger_closed_at": q.startTime.ToTime()})
 		bucketSQL = bucketSQL.Where(sq.LtOrEq{"ledger_closed_at": q.endTime.ToTime()})
 	}
-
-	// if q.endTime.IsNil() {
-	// 	maxEndTime := maxLedgerTimeQuery(q.baseAssetID, q.counterAssetID)
-	// 	minStartTime := greatestLedgerTimeQuery(q.startTime, q.resolution, q.offset, q.baseAssetID, q.counterAssetID,
-	// 		int64(q.pagingParams.Limit))
-	// 	bucketSQL = bucketSQL.Where(fmt.Sprintf("ledger_closed_at >= %s", minStartTime))
-	// 	bucketSQL = bucketSQL.Where(fmt.Sprintf("ledger_closed_at <= %s", maxEndTime))
-	// } else {
-	// 	bucketSQL = bucketSQL.Where(sq.GtOrEq{"ledger_closed_at": q.startTime.ToTime()})
-	// 	bucketSQL = bucketSQL.Where(sq.LtOrEq{"ledger_closed_at": q.endTime.ToTime()})
-	// }
 
 	//ensure open/close order for cases when multiple trades occur in the same ledger
 	bucketSQL = bucketSQL.OrderBy("history_operation_id ", "\"order\"")
@@ -211,7 +201,8 @@ func reverseBucketTrades(resolution int64, offset int64) sq.SelectBuilder {
 	)
 }
 
-// generateTimeRangeQuery returns the queries for setting the upper and lower bounds
+// generateTimeRangeQuery returns the formatted sql queries for calculating the startTime and endTime
+// from the history_trades table. This is used when either the startTime or endTime is 0.
 func generateTimeRangeQuery(q *TradeAggregationsQ) (string, string) {
 	if q.pagingParams.Order == "desc" {
 		return timeRangeOrderDesc(q)
@@ -222,56 +213,51 @@ func generateTimeRangeQuery(q *TradeAggregationsQ) (string, string) {
 // timeRangeOrderDesc generates the queries used in setting the startTime and endTime when they are not provided.
 // Used when the records are to be returned in descending order.
 func timeRangeOrderDesc(q *TradeAggregationsQ) (string, string) {
-	endTime := maxLedgerTimeQuery(q.baseAssetID, q.counterAssetID)
-	startTime := greatestLedgerTimeQuery(q.startTime, q.resolution, q.offset, q.baseAssetID, q.counterAssetID, int64(q.pagingParams.Limit))
-	// if q.startTime.IsNil() {
-	// 	startTime = leastLedgerTimeQuery(q.startTime, q.resolution, q.offset, q.baseAssetID, q.counterAssetID, int64(q.pagingParams.Limit))
-	// }
+	endTime := maxTradeTime(q.baseAssetID, q.counterAssetID)
+	startTime := greatestTimestamp(q.startTime, q.resolution, q.offset, q.baseAssetID, q.counterAssetID, int64(q.pagingParams.Limit))
 	return startTime, endTime
 }
 
 // timeRangeOrderAsc generates the queries used in setting the startTime and endTime when they are not provided.
 // Used when the records are to be returned in ascending order.
 func timeRangeOrderAsc(q *TradeAggregationsQ) (string, string) {
-	startTime := minLedgerTimeQuery(q.baseAssetID, q.counterAssetID)
+	startTime := minTradeTime(q.baseAssetID, q.counterAssetID)
 	currentEndTime := q.endTime
 	if q.endTime.IsNil() {
+		// set to current unix time in UTC.
 		currentEndTime = strtime.Now()
 	}
-	endTime := leastLedgerTimeQuery(currentEndTime, q.resolution, q.offset, q.baseAssetID, q.counterAssetID, int64(q.pagingParams.Limit))
-	// if q.endTime.IsNil() {
-	// 	endTime = greatestLedgerTimeQuery(q.endTime, q.resolution, q.offset, q.baseAssetID, q.counterAssetID, int64(q.pagingParams.Limit))
-	// }
+	endTime := leastTimestamp(currentEndTime, q.resolution, q.offset, q.baseAssetID, q.counterAssetID, int64(q.pagingParams.Limit))
 	return startTime, endTime
 }
 
-// maxLedgerTimeQuery formats a sql select query to get the most recent trade date for a given asset pair.
-func maxLedgerTimeQuery(baseAssetID, counterAssetID int64) string {
+// maxTradeTime formats a sql select query to get the most recent trade timestamp for a given asset pair.
+func maxTradeTime(baseAssetID, counterAssetID int64) string {
 	return fmt.Sprintf("(SELECT MAX(ledger_closed_at) as ledger_closed_at FROM history_trades WHERE base_asset_id=%d AND counter_asset_id=%d)", baseAssetID, counterAssetID)
 }
 
-// minLedgerTimeQuery formats a sql select query to get the oldest trade date for a given asset pair.
-func minLedgerTimeQuery(baseAssetID, counterAssetID int64) string {
+// minTradeTime formats a sql select query to get the oldest trade timestamp for a given asset pair.
+func minTradeTime(baseAssetID, counterAssetID int64) string {
 	return fmt.Sprintf("(SELECT MIN(ledger_closed_at) as ledger_closed_at FROM history_trades WHERE base_asset_id=%d AND counter_asset_id=%d)", baseAssetID, counterAssetID)
 }
 
-// greatestLedgerTimeQuery formats a sql select query to get the greater of the provided timestamp or the
+// greatestTimestamp formats a sql select query to get the greater of the provided timestamp or the
 // adjustedTimestamp. Where adjustedTimestamp is calculated as
-// (maxLedgerTimeQuery() - ((pageLimit * resolution) + offset))
-func greatestLedgerTimeQuery(ledgerTime strtime.Millis, resolution, offset, baseAssetID, counterAssetID, pageLimit int64) string {
+// (maxTradeTime() - ((pageLimit * resolution) + offset))
+func greatestTimestamp(ledgerTime strtime.Millis, resolution, offset, baseAssetID, counterAssetID, pageLimit int64) string {
 	adjustSeconds := ((pageLimit * resolution) + offset) / 1000
-	return fmt.Sprintf(`(SELECT GREATEST(TO_TIMESTAMP(%d) AT TIME ZONE 'UTC', TO_TIMESTAMP((extract(epoch from ledger_closed_at) - %d))AT TIME ZONE 'UTC') FROM %s as mltq)`, ledgerTime, adjustSeconds, maxLedgerTimeQuery(baseAssetID, counterAssetID))
+	return fmt.Sprintf(`(SELECT GREATEST(TO_TIMESTAMP(%d) AT TIME ZONE 'UTC', TO_TIMESTAMP((extract(epoch from ledger_closed_at) - %d))AT TIME ZONE 'UTC') FROM %s as mltq)`, ledgerTime, adjustSeconds, maxTradeTime(baseAssetID, counterAssetID))
 }
 
-// leastLedgerTimeQuery formats a sql select query to get the lesser of the provided timestamp or the
+// leastTimestamp formats a sql select query to get the lesser of the provided timestamp or the
 // adjustedTimestamp. Where adjustedTimestamp is calculated as
-// (minLedgerTimeQuery() + ((pageLimit * resolution) + offset))
-func leastLedgerTimeQuery(ledgerTime strtime.Millis, resolution, offset, baseAssetID, counterAssetID, pageLimit int64) string {
+// (minTradeTime() + ((pageLimit * resolution) + offset))
+func leastTimestamp(ledgerTime strtime.Millis, resolution, offset, baseAssetID, counterAssetID, pageLimit int64) string {
 	adjustSeconds := ((pageLimit * resolution) + offset) / 1000
-	return fmt.Sprintf(`(SELECT LEAST(TO_TIMESTAMP(%d) AT TIME ZONE 'UTC', TO_TIMESTAMP((extract(epoch from ledger_closed_at) + %d))AT TIME ZONE 'UTC') FROM %s as mltq)`, ledgerTime, adjustSeconds, minLedgerTimeQuery(baseAssetID, counterAssetID))
+	return fmt.Sprintf(`(SELECT LEAST(TO_TIMESTAMP(%d) AT TIME ZONE 'UTC', TO_TIMESTAMP((extract(epoch from ledger_closed_at) + %d))AT TIME ZONE 'UTC') FROM %s as mltq)`, ledgerTime, adjustSeconds, minTradeTime(baseAssetID, counterAssetID))
 }
 
-// LimitTimeRange sets the startTime and endTime depending on the order of the query to the greater of the provided startTime or the adjustedStartTime.
+// LimitTimeRange sets the startTime and endTime depending on the order of the query to the greater of the provided time or the adjustedTime.
 // If descending, set startTime to the greater of provided startTime or adjustedStartTime
 // Where adjustedStartTime is calculated as (endTime - ((pageLimit * resolution) + offset))
 // If ascending, set endTime to the lesser of provided endTime or adjustedEndTime
@@ -291,7 +277,6 @@ func (q *TradeAggregationsQ) LimitTimeRange() (*TradeAggregationsQ, error) {
 			return &TradeAggregationsQ{}, errors.Errorf("endtime(%d) is less than offset(%d)", q.endTime, offsetMillis)
 		}
 		if q.endTime < maxTimeRangeMillis {
-			// to do: should this error or set endTime = maxTimeRangeMillis
 			return &TradeAggregationsQ{}, errors.Errorf("endtime(%d) is less than maximum resolution range(%d)", q.endTime, maxTimeRangeMillis)
 		}
 		adjustedTime = q.endTime - maxTimeRangeMillis
@@ -302,16 +287,13 @@ func (q *TradeAggregationsQ) LimitTimeRange() (*TradeAggregationsQ, error) {
 	}
 
 	// default to when order is asc
-
 	if q.startTime.IsNil() {
 		return q, nil
 	}
 	if q.startTime < offsetMillis {
 		q.startTime = offsetMillis
 	}
-	// if q.startTime < maxTimeRangeMillis {
 
-	// }
 	adjustedTime = q.startTime + maxTimeRangeMillis
 	if q.endTime.IsNil() {
 		q.endTime = adjustedTime
@@ -322,27 +304,6 @@ func (q *TradeAggregationsQ) LimitTimeRange() (*TradeAggregationsQ, error) {
 		q.endTime = adjustedTime
 	}
 	return q, nil
-
-	// if q.endTime.IsNil() {
-	// 	return q, nil
-	// }
-	// var adjustedStartTime strtime.Millis
-	// maxTimeRange := (int64(q.pagingParams.Limit) * q.resolution) + q.offset
-	// maxTimeRangeMillis := strtime.MillisFromInt64(maxTimeRange)
-	// offsetMillis := strtime.MillisFromInt64(q.offset)
-
-	// if q.endTime < offsetMillis {
-	// 	return &TradeAggregationsQ{}, errors.Errorf("endtime(%d) is less than offset(%d)", q.endTime, offsetMillis)
-	// }
-	// if q.endTime < maxTimeRangeMillis {
-	// 	// to do: should this error or set endTime = maxTimeRangeMillis
-	// 	return &TradeAggregationsQ{}, errors.Errorf("endtime(%d) is less than maximum resolution range(%d)", q.endTime, maxTimeRangeMillis)
-	// }
-	// adjustedStartTime = q.endTime - maxTimeRangeMillis
-	// if q.startTime < adjustedStartTime {
-	// 	q.startTime = adjustedStartTime
-	// }
-	// return q, nil
 }
 
 // SetPageLimit sets the number of records to be returned for weekly resolution queries to a maximum of
@@ -354,6 +315,7 @@ func (q *TradeAggregationsQ) SetPageLimit() (*TradeAggregationsQ, error) {
 	}
 	if q.pagingParams.Limit > uint64(52) {
 		q.pagingParams.Limit = uint64(52)
+		// to do: add error in later versions. Introducing it now will cause usage in the wild to break
 		// return &TradeAggregationsQ{}, errors.New("value is greater than the max number of segments for weekly resolution: 52 weeks. change limit or resolution")
 	}
 	return q, nil
