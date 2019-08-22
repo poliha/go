@@ -238,11 +238,11 @@ func (action *TradeAggregateIndexAction) loadRecords() {
 		}
 	}
 
-	tradeAggregationsQ, err = tradeAggregationsQ.SetPageLimit()
-	if err != nil {
-		action.SetInvalidField("limit", err)
-		return
-	}
+	// tradeAggregationsQ, err = tradeAggregationsQ.SetPageLimit()
+	// if err != nil {
+	// 	action.SetInvalidField("limit", err)
+	// 	return
+	// }
 
 	tradeAggregationsQ, err = tradeAggregationsQ.LimitTimeRange()
 	if err != nil {
