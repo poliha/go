@@ -137,10 +137,10 @@ func (q *TradeAggregationsQ) GetSql() sq.SelectBuilder {
 		// get startTime and endTime from the history_trades table
 		startTime, endTime := generateTimeRangeQuery(q)
 		bucketSQL = bucketSQL.Where(fmt.Sprintf("ledger_closed_at >= %s", startTime))
-		bucketSQL = bucketSQL.Where(fmt.Sprintf("ledger_closed_at <= %s", endTime))
+		bucketSQL = bucketSQL.Where(fmt.Sprintf("ledger_closed_at < %s", endTime))
 	} else {
 		bucketSQL = bucketSQL.Where(sq.GtOrEq{"ledger_closed_at": q.startTime.ToTime()})
-		bucketSQL = bucketSQL.Where(sq.LtOrEq{"ledger_closed_at": q.endTime.ToTime()})
+		bucketSQL = bucketSQL.Where(sq.Lt{"ledger_closed_at": q.endTime.ToTime()})
 	}
 
 	//ensure open/close order for cases when multiple trades occur in the same ledger
