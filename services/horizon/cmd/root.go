@@ -315,6 +315,13 @@ var configOpts = []*support.ConfigOption{
 		FlagDefault: false,
 		Usage:       "[EXPERIMENTAL] enables accounts for signer endpoint using an alternative ingest system",
 	},
+	&support.ConfigOption{
+		Name:        "limit-weekly-resolution",
+		ConfigKey:   &config.LimitWeeklyResolution,
+		OptType:     types.Bool,
+		FlagDefault: false,
+		Usage:       "limits the maximum number of records returned for trade aggregation query with 1-week(604800000) resolution to 52weeks(1 year). This helps to prevent timeout for asset pairs with a lot of trades.",
+	},
 }
 
 func init() {

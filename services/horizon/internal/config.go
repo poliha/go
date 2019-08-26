@@ -71,4 +71,8 @@ type Config struct {
 	// EnableAccountsForSigner is a feature flag that enables an experimental "accounts for signer"
 	// endpoint. This endpoint uses a new ingestion system based primarily on historical archives.
 	EnableAccountsForSigner bool
+	// LimitWeeklyResolution is a feature flag that limits the maximum number of records returned for
+	// trade aggregation query with 1-week(604800000) resolution to 52weeks(1 year). This helps to prevent timeout for
+	// asset pairs with a lot of trades.
+	LimitWeeklyResolution bool
 }

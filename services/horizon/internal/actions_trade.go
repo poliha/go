@@ -238,10 +238,12 @@ func (action *TradeAggregateIndexAction) loadRecords() {
 		}
 	}
 
-	tradeAggregationsQ, err = tradeAggregationsQ.SetPageLimit()
-	if err != nil {
-		action.SetInvalidField("limit", err)
-		return
+	if action.App.config.LimitWeeklyResolution {
+		tradeAggregationsQ, err = tradeAggregationsQ.SetPageLimit()
+		if err != nil {
+			action.SetInvalidField("limit", err)
+			return
+		}
 	}
 
 	tradeAggregationsQ, err = tradeAggregationsQ.LimitTimeRange()
