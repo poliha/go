@@ -123,7 +123,7 @@ func setCurrentServerTime(host string, serverDate []string) {
 		return
 	}
 	serverTimeMapMutex.Lock()
-	ServerTimeMap[host] = ServerTimeRecord{ServerTime: st.UTC().Unix(), LocalTimeRecorded: time.Now().UTC().Unix()}
+	ServerTimeMap[host] = ServerTimeRecord{ServerTime: st.UTC().Unix(), LocalTimeRecorded: currentLocalTime()}
 	serverTimeMapMutex.Unlock()
 }
 
@@ -136,7 +136,7 @@ func currentServerTime(host string) int64 {
 		return 0
 	}
 
-	currentTime := time.Now().UTC().Unix()
+	currentTime := currentLocalTime()
 	// if it has been more than 5 minutes from the last time, then return 0 because the saved
 	// server time is behind.
 	if currentTime-st.LocalTimeRecorded > 60*5 {
@@ -144,4 +144,9 @@ func currentServerTime(host string) int64 {
 	}
 
 	return currentTime - st.LocalTimeRecorded + st.ServerTime
+}
+
+// currentLocalTime returns the current UTC unix time in seconds.
+var currentLocalTime = func() int64 {
+	return time.Now().UTC().Unix()
 }
