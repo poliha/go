@@ -1023,13 +1023,10 @@ func TestFetchTimebounds(t *testing.T) {
 		HTTP:       hmock,
 	}
 
-	// temporarily save currentLocalTime to a local variable and restore at the end of the test
-	clt := currentLocalTime
-	defer func() { currentLocalTime = clt }()
-	// mock currentLocalTime
-	currentLocalTime = func() int64 {
+	// mock currentUniversalTime
+	client.SetCurrentUniversalTime(func() int64 {
 		return int64(1560947096)
-	}
+	})
 
 	// When no saved server time, return local time
 	st, err := client.FetchTimebounds(100)
@@ -1058,7 +1055,7 @@ func TestFetchTimebounds(t *testing.T) {
 	}
 
 	// mock server time
-	newRecord := ServerTimeRecord{ServerTime: 100, LocalTimeRecorded: currentLocalTime()}
+	newRecord := ServerTimeRecord{ServerTime: 100, LocalTimeRecorded: client.currentUniversalTime()}
 	ServerTimeMap["localhost"] = newRecord
 	st, err = client.FetchTimebounds(100)
 	assert.NoError(t, err)
